@@ -1,10 +1,10 @@
 {
   "name": "esp32cam-hw",
-  "description": "ESP32-CAM hardware plugin providing camera stream, servo, and IR controls.",
+  "description": "ESP32-CAM 硬體插件，提供相機串流、伺服馬達與 IR 控制。",
   "tools": [
     {
       "name": "camera.stream_url_get",
-      "description": "Get MJPEG stream URL from ESP32-CAM.",
+      "description": "取得 ESP32-CAM 的 MJPEG 串流 URL。",
       "parameters": {
         "type": "object",
         "properties": {},
@@ -27,14 +27,14 @@
     },
     {
       "name": "servo.rotate",
-      "description": "Rotate servo on the specified axis clockwise/counter-clockwise.",
+      "description": "控制指定軸向的伺服馬達順時針/逆時針旋轉。",
       "parameters": {
         "type": "object",
         "properties": {
           "axis": { "type": "string", "enum": ["pan", "tilt"] },
           "dir": { "type": "string", "enum": ["cw", "ccw"] },
-          "step": { "type": "number", "description": "Optional micro steps" },
-          "ms": { "type": "number", "description": "Optional duration in milliseconds" }
+          "step": { "type": "number", "description": "可選，微調步數" },
+          "ms": { "type": "number", "description": "可選，持續時間 (ms)" }
         },
         "required": ["axis", "dir"]
       },
@@ -50,7 +50,7 @@
     },
     {
       "name": "ir.receive",
-      "description": "Start/stop IR receive or get the last received IR code.",
+      "description": "啟動/停止 IR 接收或取得最近一次接收到的 IR 內容。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -70,7 +70,7 @@
     },
     {
       "name": "ir.send",
-      "description": "Send an IR code using a specified protocol or raw pulses.",
+      "description": "以指定協定或 raw pulses 發射 IR code。",
       "parameters": {
         "type": "object",
         "properties": {
@@ -93,7 +93,7 @@
     },
     {
       "name": "device.status",
-      "description": "Get ESP32-CAM status information.",
+      "description": "取得 ESP32-CAM 狀態資訊。",
       "parameters": {
         "type": "object",
         "properties": {},

@@ -1,22 +1,22 @@
 # esp32cam-hw Plugin
 
-ESP32-CAM + OV2640 + IR + MG90S x2 plugin for LLM tool calls.
+提供 ESP32-CAM + OV2640 + IR + MG90S x2 的 LLM 工具插件。
 
-## Features
-- Camera MJPEG stream URL discovery.
-- Pan/Tilt servo rotation with cw/ccw and optional micro-steps/duration.
-- IR receive (start/stop/last) and IR send (protocol or raw pulses).
-- Mock mode for local development (no hardware required).
+## 功能
+- 取得相機 MJPEG 串流 URL。
+- Pan/Tilt 伺服馬達順時針/逆時針旋轉（支援步數或持續時間微調）。
+- IR 接收（start/stop/last）與 IR 發射（協定或 raw pulses）。
+- Mock 模式，無硬體也可測試。
 
-## Hardware Wiring & Power Notes
-- **Power supply**: 120V → HLK-PM01 → 5V output.
-- **Servos and ESP32-CAM must share GND**, but **servo power should be isolated** from ESP32-CAM 5V rail to reduce noise and brownout risk.
-- Add **bulk capacitors** (e.g., 470–1000µF) near servos and camera module.
-- Keep IR receiver and emitter power clean; route IR emitter from a transistor/driver if needed.
-- If you observe resets or camera dropouts, add more filtering or a dedicated 5V regulator for servos.
+## 硬體接線與供電注意事項
+- **電源**：120V → HLK-PM01 → 5V 輸出。
+- **伺服與 ESP32-CAM 必須共地**，但**伺服電源請獨立供電**，避免雜訊與壓降導致 brownout。
+- 建議在伺服與相機附近加 **470–1000µF** 電容作為濾波。
+- IR receiver/emitter 請使用穩定 5V，必要時以電晶體/驅動模組輸出。
+- 若出現重啟或畫面卡頓，請優先檢查供電與電容。
 
-## ESP32-CAM API Spec (Minimal)
-The plugin expects the ESP32-CAM to expose the following HTTP endpoints:
+## ESP32-CAM API 規格（最小可用）
+插件預期 ESP32-CAM 端提供以下 HTTP 端點：
 
 ### Status
 - **GET** `/api/status`
@@ -42,7 +42,7 @@ The plugin expects the ESP32-CAM to expose the following HTTP endpoints:
       "ms": 120
     }
     ```
-  - `step` or `ms` are optional; firmware can use either pulse count or duration.
+  - `step` 或 `ms` 可選擇使用其一。
 
 ### IR Send
 - **POST** `/api/ir/send`
@@ -80,9 +80,9 @@ The plugin expects the ESP32-CAM to expose the following HTTP endpoints:
 ### Camera Stream
 - **GET** `/stream` (MJPEG)
 
-## Plugin Usage
+## 插件使用方式
 
-### Initialization
+### 初始化
 ```js
 const plugin = require("./plugins/esp32cam-hw");
 
@@ -97,16 +97,16 @@ await plugin.updateStrategy({
 await plugin.online();
 ```
 
-### Mock Mode
+### Mock 模式
 ```js
 await plugin.updateStrategy({ mode: "mock" });
 await plugin.online();
 ```
 
-### Model JSON Tool Invocation Examples
-The LLM embeds JSON instructions that the system routes to this plugin. Example:
+### 模型 JSON 工具呼叫範例
+LLM 以 JSON 指令嵌入於 Prompt，系統解析後轉交插件執行。
 
-#### Get Camera Stream URL
+#### 取得相機串流 URL
 ```json
 {
   "tool": "camera.stream_url_get",
@@ -114,7 +114,7 @@ The LLM embeds JSON instructions that the system routes to this plugin. Example:
 }
 ```
 
-#### Rotate Pan CW and Tilt CCW
+#### 旋轉 Pan CW 與 Tilt CCW
 ```json
 {
   "tool": "servo.rotate",
@@ -128,7 +128,7 @@ The LLM embeds JSON instructions that the system routes to this plugin. Example:
 }
 ```
 
-#### IR Receive → Read Last → Send
+#### IR 接收 → 讀取 Last → 發射
 ```json
 {
   "tool": "ir.receive",
@@ -148,13 +148,13 @@ The LLM embeds JSON instructions that the system routes to this plugin. Example:
 }
 ```
 
-## Testing
-### Local Test Script
+## 測試
+### 本地測試腳本
 ```bash
 node plugins/esp32cam-hw/scripts/test-local.js
 ```
 
-### Curl Examples
+### Curl 範例
 ```bash
 curl http://192.168.1.50/api/status
 curl -X POST http://192.168.1.50/api/servo \
@@ -162,13 +162,13 @@ curl -X POST http://192.168.1.50/api/servo \
   -d '{"axis":"pan","dir":"cw","step":2}'
 ```
 
-## FAQ
-- **Cannot connect to ESP32-CAM**: check baseURL, same subnet, and firewall rules.
-- **Stream is choppy**: reduce frame size/quality in firmware or ensure Wi-Fi RSSI is strong.
-- **IR receive not working**: confirm 1838 wiring and that the firmware uses correct GPIO.
-- **Servo jitter/brownout**: isolate servo power, add capacitors, and share GND only.
+## 常見問題
+- **無法連線**：確認 baseURL、同網段與防火牆設定。
+- **串流卡頓**：降低影像解析度/品質，或檢查 Wi-Fi 訊號。
+- **IR 接收失敗**：確認 1838 接線與 GPIO 設定。
+- **伺服抖動或重啟**：分離供電、加電容、共地即可。
 
 ## Assumptions
-- The ESP32-CAM firmware implements the API endpoints exactly as defined above.
-- The plugin runtime will provide the LLM tool payloads via `send()`.
-- MJPEG stream is reachable at `/stream` with no authentication.
+- ESP32-CAM 韌體實作上述 API 端點。
+- 系統會以 `send()` 傳遞工具 payload。
+- MJPEG 串流位於 `/stream`，且無需驗證。
