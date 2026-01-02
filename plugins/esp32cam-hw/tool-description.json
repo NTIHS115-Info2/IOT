@@ -1,0 +1,113 @@
+{
+  "name": "esp32cam-hw",
+  "description": "ESP32-CAM hardware plugin providing camera stream, servo, and IR controls.",
+  "tools": [
+    {
+      "name": "camera.stream_url_get",
+      "description": "Get MJPEG stream URL from ESP32-CAM.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "data": {
+            "type": "object",
+            "properties": {
+              "url": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "servo.rotate",
+      "description": "Rotate servo on the specified axis clockwise/counter-clockwise.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "axis": { "type": "string", "enum": ["pan", "tilt"] },
+          "dir": { "type": "string", "enum": ["cw", "ccw"] },
+          "step": { "type": "number", "description": "Optional micro steps" },
+          "ms": { "type": "number", "description": "Optional duration in milliseconds" }
+        },
+        "required": ["axis", "dir"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      }
+    },
+    {
+      "name": "ir.receive",
+      "description": "Start/stop IR receive or get the last received IR code.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": { "type": "string", "enum": ["start", "stop", "last"] }
+        },
+        "required": []
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      }
+    },
+    {
+      "name": "ir.send",
+      "description": "Send an IR code using a specified protocol or raw pulses.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "format": { "type": "string", "enum": ["nec", "raw", "rc5", "rc6", "sony"] },
+          "value": { "type": "number" },
+          "bits": { "type": "number" },
+          "raw": { "type": "array", "items": { "type": "number" } }
+        },
+        "required": ["format"]
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      }
+    },
+    {
+      "name": "device.status",
+      "description": "Get ESP32-CAM status information.",
+      "parameters": {
+        "type": "object",
+        "properties": {},
+        "required": []
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "ok": { "type": "boolean" },
+          "code": { "type": "string" },
+          "message": { "type": "string" },
+          "data": { "type": "object" }
+        }
+      }
+    }
+  ]
+}
