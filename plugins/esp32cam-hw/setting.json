@@ -1,0 +1,5 @@
+{
+  "name": "esp32cam-hw",
+  "priority": 50,
+  "pluginType": "Tool"
+}
