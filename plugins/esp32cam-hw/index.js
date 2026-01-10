@@ -1,15 +1,23 @@
+const { randomUUID } = require("crypto");
+const WebSocket = require("ws");
+
 const defaults = require("./utils/defaults");
-const { request } = require("./utils/httpClient");
 const { buildMockStatus, buildMockIr, buildMockImage } = require("./utils/mock");
 
 const runtime = {
   mode: defaults.mode,
-  baseURL: defaults.baseURL,
+  wsHost: defaults.wsHost,
+  wsPort: defaults.wsPort,
   timeoutMs: defaults.timeoutMs,
   retries: defaults.retries,
   retryDelayMs: defaults.retryDelayMs,
+  queueLimit: defaults.queueLimit,
   online: false,
   lastError: null,
+  server: null,
+  currentClient: null,
+  pendingRequests: new Map(),
+  queue: [],
 };
 
 const buildResult = (ok, data, err) => {
@@ -24,37 +32,101 @@ const buildResult = (ok, data, err) => {
   };
 };
 
-const normalizeBaseURL = (baseURL) => {
-  if (!baseURL) return "";
-  return baseURL.endsWith("/") ? baseURL.slice(0, -1) : baseURL;
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const flushQueue = () => {
+  if (!runtime.currentClient || runtime.currentClient.readyState !== WebSocket.OPEN) {
+    return;
+  }
+  while (runtime.queue.length > 0) {
+    const queued = runtime.queue.shift();
+    if (!queued) continue;
+    runtime.currentClient.send(queued.message);
+  }
 };
 
-const createClientConfig = () => ({
-  timeoutMs: runtime.timeoutMs,
-  retries: runtime.retries,
-  retryDelayMs: runtime.retryDelayMs,
-});
-
-const requestJSON = async (path, method, body) => {
-  const base = normalizeBaseURL(runtime.baseURL);
-  const url = base + path;
-  const options = {
-    method,
-    headers: { "content-type": "application/json" },
-  };
-  if (body) {
-    options.body = JSON.stringify(body);
+const removeFromQueue = (id) => {
+  const index = runtime.queue.findIndex((item) => item.id === id);
+  if (index >= 0) {
+    runtime.queue.splice(index, 1);
   }
-  return request(url, options, createClientConfig());
+};
+
+const handleClientMessage = (data) => {
+  let parsed = null;
+  try {
+    parsed = JSON.parse(data.toString());
+  } catch (error) {
+    return;
+  }
+  if (!parsed || !parsed.id) {
+    return;
+  }
+  const pending = runtime.pendingRequests.get(parsed.id);
+  if (!pending) {
+    return;
+  }
+  clearTimeout(pending.timeoutId);
+  runtime.pendingRequests.delete(parsed.id);
+  pending.resolve(parsed);
+};
+
+const wsSendRequest = async (tool, params) => {
+  const id = randomUUID();
+  const message = JSON.stringify({ id, tool, params: params || {} });
+
+  const promise = new Promise((resolve, reject) => {
+    const timeoutId = setTimeout(() => {
+      runtime.pendingRequests.delete(id);
+      removeFromQueue(id);
+      reject({ code: "ETIMEDOUT", message: "Request timeout" });
+    }, runtime.timeoutMs);
+
+    runtime.pendingRequests.set(id, { resolve, reject, timeoutId });
+
+    if (runtime.currentClient && runtime.currentClient.readyState === WebSocket.OPEN) {
+      runtime.currentClient.send(message);
+      return;
+    }
+
+    if (runtime.queue.length >= runtime.queueLimit) {
+      clearTimeout(timeoutId);
+      runtime.pendingRequests.delete(id);
+      reject({ code: "EQUEUEFULL", message: "Queue limit reached" });
+      return;
+    }
+
+    runtime.queue.push({ id, message });
+  });
+
+  return promise;
+};
+
+const wsRequestWithRetry = async (tool, params) => {
+  let lastError = null;
+  for (let attempt = 0; attempt <= runtime.retries; attempt += 1) {
+    try {
+      const response = await wsSendRequest(tool, params);
+      if (response && response.ok === false) {
+        return buildResult(false, response.data || null, response);
+      }
+      return buildResult(true, response ? response.data : null, response);
+    } catch (error) {
+      lastError = error;
+      if (attempt < runtime.retries) {
+        await delay(runtime.retryDelayMs);
+        continue;
+      }
+    }
+  }
+  return buildResult(false, null, lastError || { code: "EWS", message: "Request error" });
 };
 
 const handleCameraCapture = async () => {
   if (runtime.mode === "mock") {
     return buildResult(true, buildMockImage());
   }
-  const res = await requestJSON("/api/camera/capture", "GET");
-  if (!res.ok) return buildResult(false, null, res);
-  return buildResult(true, res.data);
+  return wsRequestWithRetry("camera.capture", {});
 };
 
 const handleServoRotate = async (params) => {
@@ -67,31 +139,18 @@ const handleServoRotate = async (params) => {
   };
   if (Number.isFinite(params.step)) payload.step = params.step;
   if (Number.isFinite(params.ms)) payload.ms = params.ms;
-  const res = await requestJSON("/api/servo", "POST", payload);
-  if (!res.ok) return buildResult(false, null, res);
-  return buildResult(true, res.data);
+  return wsRequestWithRetry("servo.rotate", payload);
 };
 
 const handleIrReceive = async (params) => {
+  const action = params && params.action ? params.action : "last";
   if (runtime.mode === "mock") {
-    if (params.action === "last") {
+    if (action === "last") {
       return buildResult(true, buildMockIr());
     }
-    return buildResult(true, { action: params.action });
+    return buildResult(true, { action });
   }
-  if (params.action === "start") {
-    const res = await requestJSON("/api/ir/receive/start", "POST");
-    if (!res.ok) return buildResult(false, null, res);
-    return buildResult(true, res.data);
-  }
-  if (params.action === "stop") {
-    const res = await requestJSON("/api/ir/receive/stop", "POST");
-    if (!res.ok) return buildResult(false, null, res);
-    return buildResult(true, res.data);
-  }
-  const res = await requestJSON("/api/ir/last", "GET");
-  if (!res.ok) return buildResult(false, null, res);
-  return buildResult(true, res.data);
+  return wsRequestWithRetry("ir.receive", { action });
 };
 
 const handleIrSend = async (params) => {
@@ -104,18 +163,14 @@ const handleIrSend = async (params) => {
   if (Number.isFinite(params.value)) payload.value = params.value;
   if (Number.isFinite(params.bits)) payload.bits = params.bits;
   if (Array.isArray(params.raw)) payload.raw = params.raw;
-  const res = await requestJSON("/api/ir/send", "POST", payload);
-  if (!res.ok) return buildResult(false, null, res);
-  return buildResult(true, res.data);
+  return wsRequestWithRetry("ir.send", payload);
 };
 
 const handleDeviceStatus = async () => {
   if (runtime.mode === "mock") {
     return buildResult(true, buildMockStatus());
   }
-  const res = await requestJSON("/api/status", "GET");
-  if (!res.ok) return buildResult(false, null, res);
-  return buildResult(true, res.data);
+  return wsRequestWithRetry("device.status", {});
 };
 
 const validateParams = (tool, params) => {
@@ -152,45 +207,99 @@ const toolHandlers = {
 const updateStrategy = async (options) => {
   const next = options || {};
   if (next.mode) runtime.mode = next.mode;
-  if (next.baseURL) runtime.baseURL = next.baseURL;
+  if (next.wsHost) runtime.wsHost = next.wsHost;
+  if (Number.isFinite(next.wsPort)) runtime.wsPort = next.wsPort;
   if (Number.isFinite(next.timeoutMs)) runtime.timeoutMs = next.timeoutMs;
   if (Number.isFinite(next.retries)) runtime.retries = next.retries;
   if (Number.isFinite(next.retryDelayMs)) runtime.retryDelayMs = next.retryDelayMs;
+  if (Number.isFinite(next.queueLimit)) runtime.queueLimit = next.queueLimit;
   return buildResult(true, {
     mode: runtime.mode,
-    baseURL: runtime.baseURL,
+    wsHost: runtime.wsHost,
+    wsPort: runtime.wsPort,
     timeoutMs: runtime.timeoutMs,
     retries: runtime.retries,
     retryDelayMs: runtime.retryDelayMs,
+    queueLimit: runtime.queueLimit,
   });
 };
 
-const online = async () => {
+const online = async (options) => {
+  if (options) {
+    await updateStrategy(options);
+  }
   runtime.online = true;
   runtime.lastError = null;
   if (runtime.mode === "mock") {
     return buildResult(true, { mode: runtime.mode });
   }
-  const res = await requestJSON("/api/status", "GET");
-  if (!res.ok) {
-    runtime.lastError = res;
-    return buildResult(false, null, res);
+  if (runtime.server) {
+    return buildResult(true, { wsHost: runtime.wsHost, wsPort: runtime.wsPort });
   }
-  return buildResult(true, res.data);
+
+  return new Promise((resolve) => {
+    try {
+      const server = new WebSocket.Server({ host: runtime.wsHost, port: runtime.wsPort });
+      runtime.server = server;
+
+      server.on("connection", (socket) => {
+        runtime.currentClient = socket;
+        socket.on("message", handleClientMessage);
+        socket.on("close", () => {
+          if (runtime.currentClient === socket) {
+            runtime.currentClient = null;
+          }
+        });
+        socket.on("error", () => {
+          if (runtime.currentClient === socket) {
+            runtime.currentClient = null;
+          }
+        });
+        flushQueue();
+      });
+
+      server.on("error", (error) => {
+        runtime.lastError = { code: "EWS", message: error.message };
+      });
+
+      server.on("listening", () => {
+        resolve(buildResult(true, { wsHost: runtime.wsHost, wsPort: runtime.wsPort }));
+      });
+    } catch (error) {
+      runtime.lastError = { code: "EWS", message: error.message };
+      resolve(buildResult(false, null, runtime.lastError));
+    }
+  });
 };
 
 const offline = async () => {
   runtime.online = false;
   runtime.lastError = null;
-  return buildResult(true, { mode: runtime.mode });
+  runtime.currentClient = null;
+  runtime.queue = [];
+  for (const [id, pending] of runtime.pendingRequests.entries()) {
+    clearTimeout(pending.timeoutId);
+    pending.reject({ code: "EWS", message: "Server offline" });
+    runtime.pendingRequests.delete(id);
+  }
+
+  if (!runtime.server) {
+    return buildResult(true, { mode: runtime.mode });
+  }
+
+  const server = runtime.server;
+  runtime.server = null;
+
+  return new Promise((resolve) => {
+    server.close(() => {
+      resolve(buildResult(true, { mode: runtime.mode }));
+    });
+  });
 };
 
 const restart = async (options) => {
   await offline();
-  if (options) {
-    await updateStrategy(options);
-  }
-  return online();
+  return online(options);
 };
 
 const state = async () => {

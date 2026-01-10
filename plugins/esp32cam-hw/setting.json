@@ -1,7 +1,5 @@
 {
   "name": "esp32cam-hw",
   "priority": 50,
-  "pluginType": "LLM",
-  "version": "1.0.0",
-  "entry": "index.js"
+  "pluginType": "Tool"
 }

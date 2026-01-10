@@ -1,35 +1,49 @@
 const plugin = require("../index");
 
-const run = async () => {
-  const mode = process.env.MODE || (process.env.BASE_URL ? "real" : "mock");
-  const baseURL = process.env.BASE_URL;
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+const waitForConnection = async (timeoutMs) => {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const result = await plugin.send({ tool: "device.status", params: {} });
+    if (result.ok) {
+      return true;
+    }
+    if (result.code !== "ETIMEDOUT" && result.code !== "EQUEUEFULL") {
+      return true;
+    }
+    await delay(500);
+  }
+  return false;
+};
+
+const run = async () => {
   await plugin.updateStrategy({
-    mode,
-    baseURL,
-    timeoutMs: 4000,
-    retries: 1,
+    mode: process.env.MODE || "real",
+    wsHost: process.env.WS_HOST || "0.0.0.0",
+    wsPort: Number(process.env.WS_PORT || 8080),
+    timeoutMs: 1000,
+    retries: 0,
     retryDelayMs: 200,
+    queueLimit: 50,
   });
 
-  console.log("Online:", await plugin.online());
-  console.log("State:", await plugin.state());
+  console.log("Online:", await plugin.online({ wsPort: 8080 }));
+  console.log("等待 ESP32 連線...");
+
+  const connected = await waitForConnection(10000);
+  if (!connected) {
+    console.log("10 秒內未連線，結束測試。");
+    await plugin.offline();
+    process.exit(1);
+  }
 
   console.log("Status:", await plugin.send({ tool: "device.status", params: {} }));
-  console.log("Capture:", await plugin.send({ tool: "camera.capture", params: {} }));
-
   console.log(
     "Servo:",
     await plugin.send({ tool: "servo.rotate", params: { axis: "pan", dir: "cw", step: 1 } })
   );
-
-  console.log("IR Start:", await plugin.send({ tool: "ir.receive", params: { action: "start" } }));
   console.log("IR Last:", await plugin.send({ tool: "ir.receive", params: { action: "last" } }));
-
-  console.log(
-    "IR Send:",
-    await plugin.send({ tool: "ir.send", params: { format: "nec", value: 551502255, bits: 32 } })
-  );
 
   console.log("Offline:", await plugin.offline());
 };

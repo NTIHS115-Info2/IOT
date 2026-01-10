@@ -1,7 +1,9 @@
 module.exports = {
   mode: "real",
-  baseURL: "http://192.168.1.50",
+  wsHost: "0.0.0.0",
+  wsPort: 8080,
   timeoutMs: 4000,
   retries: 2,
   retryDelayMs: 300,
+  queueLimit: 50,
 };
