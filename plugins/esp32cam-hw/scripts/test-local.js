@@ -16,7 +16,7 @@ const run = async () => {
   console.log("State:", await plugin.state());
 
   console.log("Status:", await plugin.send({ tool: "device.status", params: {} }));
-  console.log("Stream:", await plugin.send({ tool: "camera.stream_url_get", params: {} }));
+  console.log("Capture:", await plugin.send({ tool: "camera.capture", params: {} }));
 
   console.log(
     "Servo:",

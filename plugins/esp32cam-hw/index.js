@@ -1,6 +1,6 @@
 const defaults = require("./utils/defaults");
 const { request } = require("./utils/httpClient");
-const { buildMockStatus, buildMockIr } = require("./utils/mock");
+const { buildMockStatus, buildMockIr, buildMockImage } = require("./utils/mock");
 
 const runtime = {
   mode: defaults.mode,
@@ -48,9 +48,13 @@ const requestJSON = async (path, method, body) => {
   return request(url, options, createClientConfig());
 };
 
-const handleCameraStream = async () => {
-  const base = normalizeBaseURL(runtime.baseURL);
-  return buildResult(true, { url: base + "/stream" });
+const handleCameraCapture = async () => {
+  if (runtime.mode === "mock") {
+    return buildResult(true, buildMockImage());
+  }
+  const res = await requestJSON("/api/camera/capture", "GET");
+  if (!res.ok) return buildResult(false, null, res);
+  return buildResult(true, res.data);
 };
 
 const handleServoRotate = async (params) => {
@@ -138,7 +142,7 @@ const validateParams = (tool, params) => {
 };
 
 const toolHandlers = {
-  "camera.stream_url_get": handleCameraStream,
+  "camera.capture": handleCameraCapture,
   "servo.rotate": handleServoRotate,
   "ir.receive": handleIrReceive,
   "ir.send": handleIrSend,

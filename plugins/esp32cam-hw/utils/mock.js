@@ -14,7 +14,14 @@ const buildMockIr = () => ({
   receivedAt: new Date().toISOString(),
 });
 
+const buildMockImage = () => ({
+  mime: "image/jpeg",
+  imageBase64: "BASE64_MOCK_IMAGE_DATA",
+  capturedAt: new Date().toISOString(),
+});
+
 module.exports = {
   buildMockStatus,
   buildMockIr,
+  buildMockImage,
 };

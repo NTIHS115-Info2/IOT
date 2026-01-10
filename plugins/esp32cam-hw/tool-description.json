@@ -1,10 +1,10 @@
 {
   "name": "esp32cam-hw",
-  "description": "ESP32-CAM 硬體插件，提供相機串流、伺服馬達與 IR 控制。",
+  "description": "ESP32-CAM 硬體插件，提供相機拍照、伺服馬達與 IR 控制。",
   "tools": [
     {
-      "name": "camera.stream_url_get",
-      "description": "取得 ESP32-CAM 的 MJPEG 串流 URL。",
+      "name": "camera.capture",
+      "description": "觸發 ESP32-CAM 拍照並回傳影像資料。",
       "parameters": {
         "type": "object",
         "properties": {},
@@ -19,7 +19,9 @@
           "data": {
             "type": "object",
             "properties": {
-              "url": { "type": "string" }
+              "mime": { "type": "string" },
+              "imageBase64": { "type": "string" },
+              "capturedAt": { "type": "string" }
             }
           }
         }

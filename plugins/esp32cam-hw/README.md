@@ -3,7 +3,7 @@
 提供 ESP32-CAM + OV2640 + IR + MG90S x2 的 LLM 工具插件。
 
 ## 功能
-- 取得相機 MJPEG 串流 URL。
+- 由模型指令觸發拍照並回傳影像資料。
 - Pan/Tilt 伺服馬達順時針/逆時針旋轉（支援步數或持續時間微調）。
 - IR 接收（start/stop/last）與 IR 發射（協定或 raw pulses）。
 - Mock 模式，無硬體也可測試。
@@ -28,6 +28,17 @@
       "temperatureC": 36.5,
       "voltageV": 4.95,
       "lastError": null
+    }
+    ```
+
+### Camera Capture
+- **GET** `/api/camera/capture`
+  - **Response**:
+    ```json
+    {
+      "mime": "image/jpeg",
+      "imageBase64": "...",
+      "capturedAt": "2024-01-01T00:00:00.000Z"
     }
     ```
 
@@ -77,9 +88,6 @@
     }
     ```
 
-### Camera Stream
-- **GET** `/stream` (MJPEG)
-
 ## 插件使用方式
 
 ### 初始化
@@ -106,10 +114,10 @@ await plugin.online();
 ### 模型 JSON 工具呼叫範例
 LLM 以 JSON 指令嵌入於 Prompt，系統解析後轉交插件執行。
 
-#### 取得相機串流 URL
+#### 觸發拍照回傳影像
 ```json
 {
-  "tool": "camera.stream_url_get",
+  "tool": "camera.capture",
   "params": {}
 }
 ```
@@ -157,6 +165,7 @@ node plugins/esp32cam-hw/scripts/test-local.js
 ### Curl 範例
 ```bash
 curl http://192.168.1.50/api/status
+curl http://192.168.1.50/api/camera/capture
 curl -X POST http://192.168.1.50/api/servo \
   -H 'content-type: application/json' \
   -d '{"axis":"pan","dir":"cw","step":2}'
@@ -164,11 +173,10 @@ curl -X POST http://192.168.1.50/api/servo \
 
 ## 常見問題
 - **無法連線**：確認 baseURL、同網段與防火牆設定。
-- **串流卡頓**：降低影像解析度/品質，或檢查 Wi-Fi 訊號。
+- **拍照回傳失敗**：確認 `/api/camera/capture` 是否正確實作並輸出 JSON。
 - **IR 接收失敗**：確認 1838 接線與 GPIO 設定。
 - **伺服抖動或重啟**：分離供電、加電容、共地即可。
 
 ## Assumptions
 - ESP32-CAM 韌體實作上述 API 端點。
 - 系統會以 `send()` 傳遞工具 payload。
-- MJPEG 串流位於 `/stream`，且無需驗證。
